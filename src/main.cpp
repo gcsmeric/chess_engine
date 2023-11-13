@@ -35,6 +35,19 @@ bool verifyInputMove(string str) {
     return false;
 }
 
+float eval(Board board) {
+    //material eval
+    float matEval = 9*board.pieces(PieceType::PAWN, Color::WHITE);
+    PieceType::pw
+    //IMPLEMENT NAIVE https://www.chessprogramming.org/Evaluation#Where_to_Start
+    //MATERIAL EVAL (FIGURE OUT HOW TO ITERATE OVER PIECE AND COLOR ENUMS 
+    //AND ADD THOSE VALS TO MATEVAL)
+    //THEN ADD TO EVAL A FACTOR BASED ON MOBILITY AS IN LINK MATERIAL EXAMPLE ABOVE
+    //(NUMBER OF LEGAL MOVES), THEN ALSO A FACTOR FOR WHO'S TURN IT IS AND FINALLY
+    //SOME TABLES OF PIECE VALUES FOR EACH SQUARE https://www.chessprogramming.org/Piece-Square_Tables
+    //https://www.chessprogramming.org/PeSTO%27s_Evaluation_Function
+}
+
 int main() {
     cout << "Launching chess program" << endl;
     Board board;
@@ -51,7 +64,7 @@ int main() {
         }
         inputMove = uci::uciToMove(board, inputMoveStr);
         board.makeMove(inputMove);
-        
+
 
 
     }
