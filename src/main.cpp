@@ -137,6 +137,25 @@ float negaMax(Board board, int depth) {
     //then implement alpha beta pruning https://www.chessprogramming.org/Alpha-Beta
 }
 
+Move rootNegaMax(Board board, int depth) {
+    assert(depth>0);
+    float max = -9999999; 
+    Move bestMove;
+    Movelist currLegalMoves = Movelist();
+    movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
+    for (int i=0; i<currLegalMoves.size(); i++) {
+        board.makeMove(currLegalMoves[i]);
+        float score = -negaMax(board, depth-1);
+        if (score > max) {
+            max = score;
+            bestMove = currLegalMoves[i];
+        }
+        board.unmakeMove(currLegalMoves[i]);
+    }
+    return bestMove;
+    //then implement alpha beta pruning https://www.chessprogramming.org/Alpha-Beta
+}
+
 int main() {
     cout << "Launching chess program" << endl;
     Board board;
@@ -154,7 +173,7 @@ int main() {
         }
         inputMove = uci::uciToMove(board, inputMoveStr);
         board.makeMove(inputMove);
-        cout << negaMax(board, 4);
+        cout << rootNegaMax(board, 4);
     }
     
     return 0;
