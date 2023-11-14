@@ -112,7 +112,7 @@ int16_t eval(Board board) {
     if (currLegalMoves.size() == 0) {
         if (board.isAttacked(board.kingSq(sideToMove), sideToMove)) {
             if (sideToMove == Color::WHITE) {
-                totalEval = -32768;
+                totalEval = -32767;
             }
             else {
                 totalEval = 32767;
@@ -135,7 +135,7 @@ int16_t eval(Board board) {
                 totalEval = 32767;
             }
             else {
-                totalEval = -32768;
+                totalEval = -32767;
             }         
         }
         else {
@@ -157,7 +157,7 @@ int16_t negaMax(Board board, int depth) {
     if (depth == 0) {
         return eval(board);
     }
-    int16_t max = -32768; 
+    int16_t max = -32767; 
     Movelist currLegalMoves = Movelist();
     movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
     for (int i=0; i<currLegalMoves.size(); i++) {
@@ -174,7 +174,7 @@ int16_t negaMax(Board board, int depth) {
 
 Move rootNegaMax(Board board, int depth) {
     assert(depth>0);
-    int16_t max = -32768; 
+    int16_t max = -32767; 
     Move bestMove;
     Movelist currLegalMoves = Movelist();
     movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
@@ -197,7 +197,7 @@ int16_t quiesce(Board board, int16_t alpha, int16_t beta) {
         return beta;
     }
     if (alpha < stand_pat) {
-        stand_pat = alpha;
+        alpha = stand_pat;
     }
     //investigate all captures fully to avoid scenarios where max depth is reached mid piece-exchange
     //which can lead to faulty valuations (since capture-back is not seen by engine which'll erroneously
@@ -221,6 +221,7 @@ int16_t quiesce(Board board, int16_t alpha, int16_t beta) {
 
 int16_t alphaBeta(Board board, int16_t alpha, int16_t beta, int remDepth) {
     if (remDepth == 0) {
+        //cout << quiesce(board, alpha, beta) << "\n"; 
         return quiesce(board, alpha, beta);
     }
     Movelist currLegalMoves = Movelist();
@@ -228,10 +229,12 @@ int16_t alphaBeta(Board board, int16_t alpha, int16_t beta, int remDepth) {
     for (int i=0; i<currLegalMoves.size(); i++) {
         board.makeMove(currLegalMoves[i]);
         int16_t score = -alphaBeta(board, -beta, -alpha, remDepth-1);
+        //cout << score << " " << remDepth << " " << alpha << " " << beta << "\n";
         if (score >= beta) {
             return beta;
         }
         if (score > alpha) {
+            //cout << score << " " << remDepth << "\n";
             alpha = score;
         }
         board.unmakeMove(currLegalMoves[i]);
@@ -241,20 +244,28 @@ int16_t alphaBeta(Board board, int16_t alpha, int16_t beta, int remDepth) {
 
 Move alphaBetaSearchRoot(Board board, int16_t alpha, int16_t beta, int remDepth) {
     assert(remDepth > 0);
-    cout << "STARTING ROOT SEARCH" << "\n" << board;
     Move bestMove;
     Movelist currLegalMoves = Movelist();
+    int16_t currMaxScore = -32767;
     movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
     for (int i=0; i<currLegalMoves.size(); i++) {
+        /*if (i==0) {
+            bestMove = currLegalMoves[i];
+        }*/
         board.makeMove(currLegalMoves[i]);
         int16_t score = -alphaBeta(board, -beta, -alpha, remDepth-1);
+        cout << score << " " << remDepth << "\n";
+        //cout << currLegalMoves[i] << " " << score << "\n";
         if (score >= beta) {
-            bestMove = currLegalMoves[i];
+            cout << "remdepth " << remDepth << "\n";
             return beta;
         }
         if (score > alpha) {
-            bestMove = currLegalMoves[i];
             alpha = score;
+        }
+        if (score > currMaxScore) {
+            bestMove = currLegalMoves[i];
+            cout << "updated best legal move " << currLegalMoves[i] << "\n";
         }
         board.unmakeMove(currLegalMoves[i]);
     }
@@ -279,7 +290,8 @@ int main() {
         inputMove = uci::uciToMove(board, inputMoveStr);
         board.makeMove(inputMove);
         //Move engineResponse = rootNegaMax(board, depth);
-        Move engineResponse = alphaBetaSearchRoot(board, -32768, 32767, depth);
+        Move engineResponse = alphaBetaSearchRoot(board, -32767, 32767, depth);
+        cout << "quiesce eval is " << quiesce(board, -32767, 32767) << "\n";
         board.makeMove(engineResponse);
         cout << engineResponse << "\n";
     }
