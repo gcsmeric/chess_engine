@@ -20,7 +20,7 @@ bool verifyInputMove(string str) {
             str[1] >= '1' && str[1] <= '8' && str[3] >= '1' && str[3] <= '8') {
             // If the string has 5 characters, check the 5th character
             if (str.size() == 5) {
-                char fifthChar = std::tolower(str[4]); // Convert to lowercase for case-insensitivity
+                char fifthChar = str[4];
                 if (fifthChar == 'n' || fifthChar == 'b' || fifthChar == 'r' || fifthChar == 'q') {
                     return true;
                 }
@@ -35,10 +35,41 @@ bool verifyInputMove(string str) {
     return false;
 }
 
+int bitBoardCardinality (U64 x) {
+   int count = 0;
+   while (x) {
+       count++;
+       x &= x - 1;
+   }
+   return count;
+}
+
 float eval(Board board) {
     //material eval
-    float matEval = 9*board.pieces(PieceType::PAWN, Color::WHITE);
-    PieceType::pw
+    float matEval = 0;
+    9*board.pieces(PieceType::PAWN, Color::WHITE);
+    std::vector<int> coefficients = {1,3,3,5,9};
+    int coeffIndex = 0;
+    for (const auto p : {PieceType::PAWN, PieceType::BISHOP, PieceType::KNIGHT, PieceType::ROOK, PieceType::QUEEN}) {
+        matEval += coefficients[coeffIndex]*(bitBoardCardinality(board.pieces(p, Color::WHITE))-bitBoardCardinality(board.pieces(p, Color::BLACK)));
+        coeffIndex += 1;
+    }
+    Movelist currLegalMoves = Movelist();
+    movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
+    Move randomMove = currLegalMoves[0];
+    board.makeNullMove();
+    Movelist currOpponentLegalMoves = Movelist();
+    movegen::legalmoves<MoveGenType::ALL>(currOpponentLegalMoves, board);
+    board.unmakeNullMove();
+    float mobilityEval = 0.02*(currLegalMoves.size()-currOpponentLegalMoves.size());
+    float currentTurnBonus = 0.1;
+    if (board.sideToMove() == Color::BLACK) {
+        mobilityEval *= -1;
+        currentTurnBonus *= -1;
+    }
+    float totalEval = matEval+mobilityEval+currentTurnBonus;
+    
+    return totalEval;
     //IMPLEMENT NAIVE https://www.chessprogramming.org/Evaluation#Where_to_Start
     //MATERIAL EVAL (FIGURE OUT HOW TO ITERATE OVER PIECE AND COLOR ENUMS 
     //AND ADD THOSE VALS TO MATEVAL)
@@ -53,6 +84,7 @@ int main() {
     Board board;
     Move inputMove;
     string inputMoveStr = "";
+    //board.sideToMove(); !!
     while (true){
         while (true) {
             cout << " Input your move: " << endl;
@@ -64,9 +96,7 @@ int main() {
         }
         inputMove = uci::uciToMove(board, inputMoveStr);
         board.makeMove(inputMove);
-
-
-
+        cout << eval(board);
     }
     
     return 0;
