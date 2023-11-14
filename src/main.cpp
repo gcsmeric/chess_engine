@@ -173,7 +173,9 @@ int main() {
         }
         inputMove = uci::uciToMove(board, inputMoveStr);
         board.makeMove(inputMove);
-        cout << rootNegaMax(board, 4);
+        Move engineResponse = rootNegaMax(board, 4);
+        board.makeMove(engineResponse);
+        cout << engineResponse;
     }
     
     return 0;
