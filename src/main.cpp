@@ -81,9 +81,10 @@ int bitBoardCardinality (U64 x) {
     //https://www.chessprogramming.org/PeSTO%27s_Evaluation_Function
 }*/
 
-int16_t eval(Board board) {
+int32_t eval(Board board) {
     //material eval
-    int16_t matEval = 0;
+    int32_t matEval = 0;
+    Color sideToMove = board.sideToMove();
     std::vector<int> coefficients = {1000,3000,3000,5000,9000};
     int coeffIndex = 0;
     for (const auto p : {PieceType::PAWN, PieceType::BISHOP, PieceType::KNIGHT, PieceType::ROOK, PieceType::QUEEN}) {
@@ -97,16 +98,50 @@ int16_t eval(Board board) {
     Movelist currOpponentLegalMoves = Movelist();
     movegen::legalmoves<MoveGenType::ALL>(currOpponentLegalMoves, board);
     board.unmakeNullMove();
-    int16_t mobilityEval = currLegalMoves.size()-currOpponentLegalMoves.size();
-    int16_t currentTurnBonus = 150;
-    if (board.sideToMove() == Color::BLACK) {
+    int32_t mobilityEval = currLegalMoves.size()-currOpponentLegalMoves.size();
+    int32_t currentTurnBonus = 150;
+    if (sideToMove == Color::BLACK) {
         mobilityEval *= -1;
         currentTurnBonus *= -1;
     }
-    int16_t totalEval = matEval+mobilityEval+currentTurnBonus;
-    if (board.sideToMove() == Color::BLACK) {
+    int32_t totalEval = matEval+mobilityEval+currentTurnBonus;
+    if (sideToMove == Color::BLACK) {
         totalEval *= -1;
     }
+    //handle checkmate and stalemate positions
+    if (currLegalMoves.size() == 0) {
+        if (board.isAttacked(board.kingSq(sideToMove), sideToMove)) {
+            if (sideToMove == Color::WHITE) {
+                totalEval = -9999999;
+            }
+            else {
+                totalEval = 9999999;
+            }         
+        }
+        else {
+            totalEval = 0;
+        }
+    }
+    else if (currOpponentLegalMoves.size() == 0) {
+        Color oppositeColor;
+        if (sideToMove == Color::WHITE) {
+            oppositeColor == Color::BLACK;
+        }
+        else {
+            oppositeColor == Color::WHITE;
+        }
+        if (board.isAttacked(board.kingSq(oppositeColor), oppositeColor)) {
+            if (sideToMove == Color::WHITE) {
+                totalEval = 9999999;
+            }
+            else {
+                totalEval = -9999999;
+            }         
+        }
+        else {
+            totalEval = 0;
+        }
+    } 
 
     return totalEval;
     //IMPLEMENT NAIVE https://www.chessprogramming.org/Evaluation#Where_to_Start
@@ -118,16 +153,16 @@ int16_t eval(Board board) {
     //https://www.chessprogramming.org/PeSTO%27s_Evaluation_Function
 }
 
-float negaMax(Board board, int depth) {
+int32_t negaMax(Board board, int depth) {
     if (depth == 0) {
         return eval(board);
     }
-    float max = -9999999; 
+    int32_t max = -9999999; 
     Movelist currLegalMoves = Movelist();
     movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
     for (int i=0; i<currLegalMoves.size(); i++) {
         board.makeMove(currLegalMoves[i]);
-        float score = -negaMax(board, depth-1);
+        int32_t score = -negaMax(board, depth-1);
         if (score > max) {
             max = score;
         }
@@ -139,13 +174,13 @@ float negaMax(Board board, int depth) {
 
 Move rootNegaMax(Board board, int depth) {
     assert(depth>0);
-    float max = -9999999; 
+    int32_t max = -9999999; 
     Move bestMove;
     Movelist currLegalMoves = Movelist();
     movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
     for (int i=0; i<currLegalMoves.size(); i++) {
         board.makeMove(currLegalMoves[i]);
-        float score = -negaMax(board, depth-1);
+        int32_t score = -negaMax(board, depth-1);
         if (score > max) {
             max = score;
             bestMove = currLegalMoves[i];
