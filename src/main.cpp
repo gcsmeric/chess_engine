@@ -44,10 +44,9 @@ int bitBoardCardinality (U64 x) {
    return count;
 }
 
-float eval(Board board) {
+/*float eval(Board board) {
     //material eval
     float matEval = 0;
-    9*board.pieces(PieceType::PAWN, Color::WHITE);
     std::vector<int> coefficients = {1,3,3,5,9};
     int coeffIndex = 0;
     for (const auto p : {PieceType::PAWN, PieceType::BISHOP, PieceType::KNIGHT, PieceType::ROOK, PieceType::QUEEN}) {
@@ -68,7 +67,10 @@ float eval(Board board) {
         currentTurnBonus *= -1;
     }
     float totalEval = matEval+mobilityEval+currentTurnBonus;
-    
+    if (board.sideToMove() == Color::BLACK) {
+        totalEval *= -1;
+    }
+
     return totalEval;
     //IMPLEMENT NAIVE https://www.chessprogramming.org/Evaluation#Where_to_Start
     //MATERIAL EVAL (FIGURE OUT HOW TO ITERATE OVER PIECE AND COLOR ENUMS 
@@ -77,6 +79,62 @@ float eval(Board board) {
     //(NUMBER OF LEGAL MOVES), THEN ALSO A FACTOR FOR WHO'S TURN IT IS AND FINALLY
     //SOME TABLES OF PIECE VALUES FOR EACH SQUARE https://www.chessprogramming.org/Piece-Square_Tables
     //https://www.chessprogramming.org/PeSTO%27s_Evaluation_Function
+}*/
+
+int16_t eval(Board board) {
+    //material eval
+    int16_t matEval = 0;
+    std::vector<int> coefficients = {1000,3000,3000,5000,9000};
+    int coeffIndex = 0;
+    for (const auto p : {PieceType::PAWN, PieceType::BISHOP, PieceType::KNIGHT, PieceType::ROOK, PieceType::QUEEN}) {
+        matEval += coefficients[coeffIndex]*(bitBoardCardinality(board.pieces(p, Color::WHITE))-bitBoardCardinality(board.pieces(p, Color::BLACK)));
+        coeffIndex += 1;
+    }
+    Movelist currLegalMoves = Movelist();
+    movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
+    Move randomMove = currLegalMoves[0];
+    board.makeNullMove();
+    Movelist currOpponentLegalMoves = Movelist();
+    movegen::legalmoves<MoveGenType::ALL>(currOpponentLegalMoves, board);
+    board.unmakeNullMove();
+    int16_t mobilityEval = currLegalMoves.size()-currOpponentLegalMoves.size();
+    int16_t currentTurnBonus = 150;
+    if (board.sideToMove() == Color::BLACK) {
+        mobilityEval *= -1;
+        currentTurnBonus *= -1;
+    }
+    int16_t totalEval = matEval+mobilityEval+currentTurnBonus;
+    if (board.sideToMove() == Color::BLACK) {
+        totalEval *= -1;
+    }
+
+    return totalEval;
+    //IMPLEMENT NAIVE https://www.chessprogramming.org/Evaluation#Where_to_Start
+    //MATERIAL EVAL (FIGURE OUT HOW TO ITERATE OVER PIECE AND COLOR ENUMS 
+    //AND ADD THOSE VALS TO MATEVAL)
+    //THEN ADD TO EVAL A FACTOR BASED ON MOBILITY AS IN LINK MATERIAL EXAMPLE ABOVE
+    //(NUMBER OF LEGAL MOVES), THEN ALSO A FACTOR FOR WHO'S TURN IT IS AND FINALLY
+    //SOME TABLES OF PIECE VALUES FOR EACH SQUARE https://www.chessprogramming.org/Piece-Square_Tables
+    //https://www.chessprogramming.org/PeSTO%27s_Evaluation_Function
+}
+
+float negaMax(Board board, int depth) {
+    if (depth == 0) {
+        return eval(board);
+    }
+    float max = -9999999; 
+    Movelist currLegalMoves = Movelist();
+    movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
+    for (int i=0; i<currLegalMoves.size(); i++) {
+        board.makeMove(currLegalMoves[i]);
+        float score = -negaMax(board, depth-1);
+        if (score > max) {
+            max = score;
+        }
+        board.unmakeMove(currLegalMoves[i]);
+    }
+    return max;
+    //then implement alpha beta pruning https://www.chessprogramming.org/Alpha-Beta
 }
 
 int main() {
@@ -96,7 +154,7 @@ int main() {
         }
         inputMove = uci::uciToMove(board, inputMoveStr);
         board.makeMove(inputMove);
-        cout << eval(board);
+        cout << negaMax(board, 4);
     }
     
     return 0;
