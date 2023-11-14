@@ -99,15 +99,12 @@ int16_t eval(Board board) {
     movegen::legalmoves<MoveGenType::ALL>(currOpponentLegalMoves, board);
     board.unmakeNullMove();
     int16_t mobilityEval = currLegalMoves.size()-currOpponentLegalMoves.size();
-    int16_t currentTurnBonus = 15;
+    //int16_t currentTurnBonus = 15;
     if (sideToMove == Color::BLACK) {
+        matEval *= -1;
         mobilityEval *= -1;
-        currentTurnBonus *= -1;
     }
-    int16_t totalEval = matEval+mobilityEval+currentTurnBonus;
-    if (sideToMove == Color::BLACK) {
-        totalEval *= -1;
-    }
+    int16_t totalEval = matEval+mobilityEval;
     //handle checkmate and stalemate positions
     if (currLegalMoves.size() == 0) {
         if (board.isAttacked(board.kingSq(sideToMove), sideToMove)) {
@@ -277,7 +274,7 @@ int main() {
     Board board;
     Move inputMove;
     string inputMoveStr = "";
-    int depth = 5;
+    int depth = 4;
     while (true){
         while (true) {
             cout << " Input your move: " << endl;
@@ -305,10 +302,11 @@ int main() {
         //Move engineResponse = alphaBetaSearchRoot(board, -32767, 32767, depth);
         cout << "quiesce eval is " << quiesce(board, -32767, 32767) << "\n";
         cout << "normal eval is " << eval(board) << "\n";
+        //cout << alphaBeta(board, -32767, 32767, depth) << "\n";
         board.makeMove(engineResponse);
         cout << engineResponse << "\n";
-        cout << "quiesce eval is " << quiesce(board, -32767, 32767) << "\n";
-        cout << "normal eval is " << eval(board) << "\n";
+        //cout << "quiesce eval is " << quiesce(board, -32767, 32767) << "\n";
+        //cout << "normal eval is " << eval(board) << "\n";
     }
     
     return 0;
