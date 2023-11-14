@@ -254,10 +254,10 @@ Move alphaBetaSearchRoot(Board board, int16_t alpha, int16_t beta, int remDepth)
         }*/
         board.makeMove(currLegalMoves[i]);
         int16_t score = -alphaBeta(board, -beta, -alpha, remDepth-1);
-        cout << score << " " << remDepth << "\n";
+        //cout << score << " " << remDepth << "\n";
         //cout << currLegalMoves[i] << " " << score << "\n";
         if (score >= beta) {
-            cout << "remdepth " << remDepth << "\n";
+            //cout << "remdepth " << remDepth << "\n";
             return beta;
         }
         if (score > alpha) {
@@ -265,7 +265,7 @@ Move alphaBetaSearchRoot(Board board, int16_t alpha, int16_t beta, int remDepth)
         }
         if (score > currMaxScore) {
             bestMove = currLegalMoves[i];
-            cout << "updated best legal move " << currLegalMoves[i] << "\n";
+            //cout << "updated best legal move " << currLegalMoves[i] << "\n";
         }
         board.unmakeMove(currLegalMoves[i]);
     }
@@ -277,23 +277,38 @@ int main() {
     Board board;
     Move inputMove;
     string inputMoveStr = "";
-    int depth = 4;
+    int depth = 5;
     while (true){
         while (true) {
             cout << " Input your move: " << endl;
             cin >> inputMoveStr;
-            if (verifyInputMove(inputMoveStr)) {
+            inputMove = uci::uciToMove(board, inputMoveStr);
+            Movelist currLegalMoves;
+            movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
+            bool isLegalMoveFlag = false;
+            for (int i=0; i<currLegalMoves.size(); i++) {
+                if (currLegalMoves[i] == inputMove) {
+                    isLegalMoveFlag = true;
+                }
+            }
+            if (verifyInputMove(inputMoveStr) && isLegalMoveFlag) {
                 cout << "Move Accepted - Computing Response" << endl;
                 break;
             }
+            else {
+                cout << "Invalid or illegal move. Please try again.";
+            }
         }
-        inputMove = uci::uciToMove(board, inputMoveStr);
+    
         board.makeMove(inputMove);
-        //Move engineResponse = rootNegaMax(board, depth);
-        Move engineResponse = alphaBetaSearchRoot(board, -32767, 32767, depth);
+        Move engineResponse = rootNegaMax(board, depth);
+        //Move engineResponse = alphaBetaSearchRoot(board, -32767, 32767, depth);
         cout << "quiesce eval is " << quiesce(board, -32767, 32767) << "\n";
+        cout << "normal eval is " << eval(board) << "\n";
         board.makeMove(engineResponse);
         cout << engineResponse << "\n";
+        cout << "quiesce eval is " << quiesce(board, -32767, 32767) << "\n";
+        cout << "normal eval is " << eval(board) << "\n";
     }
     
     return 0;
