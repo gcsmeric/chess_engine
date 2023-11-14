@@ -112,7 +112,7 @@ int16_t eval(Board board) {
     if (currLegalMoves.size() == 0) {
         if (board.isAttacked(board.kingSq(sideToMove), sideToMove)) {
             if (sideToMove == Color::WHITE) {
-                totalEval = -32767;
+                totalEval = -32768;
             }
             else {
                 totalEval = 32767;
@@ -135,7 +135,7 @@ int16_t eval(Board board) {
                 totalEval = 32767;
             }
             else {
-                totalEval = -32767;
+                totalEval = -32768;
             }         
         }
         else {
@@ -157,7 +157,7 @@ int16_t negaMax(Board board, int depth) {
     if (depth == 0) {
         return eval(board);
     }
-    int16_t max = -32767; 
+    int16_t max = -32768; 
     Movelist currLegalMoves = Movelist();
     movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
     for (int i=0; i<currLegalMoves.size(); i++) {
@@ -172,15 +172,9 @@ int16_t negaMax(Board board, int depth) {
     //then implement alpha beta pruning https://www.chessprogramming.org/Alpha-Beta
 }
 
-/*int16_t alphaBeta(int16_t alpha, int16_t beta, int remDepth) {
-    if (remDepth == 0) {
-        return negaMax
-    }
-}*/
-
 Move rootNegaMax(Board board, int depth) {
     assert(depth>0);
-    int16_t max = -32767; 
+    int16_t max = -32768; 
     Move bestMove;
     Movelist currLegalMoves = Movelist();
     movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
@@ -197,12 +191,82 @@ Move rootNegaMax(Board board, int depth) {
     //then implement alpha beta pruning https://www.chessprogramming.org/Alpha-Beta
 }
 
+int16_t quiesce(Board board, int16_t alpha, int16_t beta) {
+    int16_t stand_pat = eval(board);
+    if (stand_pat >= beta) {
+        return beta;
+    }
+    if (alpha < stand_pat) {
+        stand_pat = alpha;
+    }
+    //investigate all captures fully to avoid scenarios where max depth is reached mid piece-exchange
+    //which can lead to faulty valuations (since capture-back is not seen by engine which'll erroneously
+    //think it's gained material)
+    Movelist currCaptureMoves = Movelist();
+    movegen::legalmoves<MoveGenType::CAPTURE>(currCaptureMoves, board);
+    for (int i=0; i<currCaptureMoves.size(); i++) {
+        board.makeMove(currCaptureMoves[i]);
+        int16_t score = -quiesce(board, -beta, -alpha);
+        board.unmakeMove(currCaptureMoves[i]);
+
+        if (score >= beta) {
+            return beta;
+        }
+        if (score > alpha) {
+            alpha = score;
+        }
+    }
+    return alpha;
+}
+
+int16_t alphaBeta(Board board, int16_t alpha, int16_t beta, int remDepth) {
+    if (remDepth == 0) {
+        return quiesce(board, alpha, beta);
+    }
+    Movelist currLegalMoves = Movelist();
+    movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
+    for (int i=0; i<currLegalMoves.size(); i++) {
+        board.makeMove(currLegalMoves[i]);
+        int16_t score = -alphaBeta(board, -beta, -alpha, remDepth-1);
+        if (score >= beta) {
+            return beta;
+        }
+        if (score > alpha) {
+            alpha = score;
+        }
+        board.unmakeMove(currLegalMoves[i]);
+    }
+    return alpha;
+}
+
+Move alphaBetaSearchRoot(Board board, int16_t alpha, int16_t beta, int remDepth) {
+    assert(remDepth > 0);
+    cout << "STARTING ROOT SEARCH" << "\n" << board;
+    Move bestMove;
+    Movelist currLegalMoves = Movelist();
+    movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
+    for (int i=0; i<currLegalMoves.size(); i++) {
+        board.makeMove(currLegalMoves[i]);
+        int16_t score = -alphaBeta(board, -beta, -alpha, remDepth-1);
+        if (score >= beta) {
+            bestMove = currLegalMoves[i];
+            return beta;
+        }
+        if (score > alpha) {
+            bestMove = currLegalMoves[i];
+            alpha = score;
+        }
+        board.unmakeMove(currLegalMoves[i]);
+    }
+    return bestMove;
+}
+
 int main() {
     cout << "Launching chess program" << endl;
     Board board;
     Move inputMove;
     string inputMoveStr = "";
-    //board.sideToMove(); !!
+    int depth = 4;
     while (true){
         while (true) {
             cout << " Input your move: " << endl;
@@ -214,9 +278,10 @@ int main() {
         }
         inputMove = uci::uciToMove(board, inputMoveStr);
         board.makeMove(inputMove);
-        Move engineResponse = rootNegaMax(board, 4);
+        //Move engineResponse = rootNegaMax(board, depth);
+        Move engineResponse = alphaBetaSearchRoot(board, -32768, 32767, depth);
         board.makeMove(engineResponse);
-        cout << engineResponse;
+        cout << engineResponse << "\n";
     }
     
     return 0;
