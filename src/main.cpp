@@ -82,6 +82,9 @@ int bitBoardCardinality (U64 x) {
 }*/
 
 int16_t eval(Board board) {
+    //returns eval in centipawns of position (W.R.T. player who's turn it is)
+    //i.e. eval of 100 when it's black's turn means black has an advantage worth roughly a pawn
+
     //material eval
     int16_t matEval = 0;
     Color sideToMove = board.sideToMove();
@@ -102,18 +105,12 @@ int16_t eval(Board board) {
     //int16_t currentTurnBonus = 15;
     if (sideToMove == Color::BLACK) {
         matEval *= -1;
-        mobilityEval *= -1;
     }
     int16_t totalEval = matEval+mobilityEval;
     //handle checkmate and stalemate positions
     if (currLegalMoves.size() == 0) {
         if (board.isAttacked(board.kingSq(sideToMove), sideToMove)) {
-            if (sideToMove == Color::WHITE) {
-                totalEval = -32767;
-            }
-            else {
-                totalEval = 32767;
-            }         
+            totalEval = -32767;    
         }
         else {
             totalEval = 0;
@@ -128,12 +125,7 @@ int16_t eval(Board board) {
             oppositeColor == Color::WHITE;
         }
         if (board.isAttacked(board.kingSq(oppositeColor), oppositeColor)) {
-            if (sideToMove == Color::WHITE) {
-                totalEval = 32767;
-            }
-            else {
-                totalEval = -32767;
-            }         
+            totalEval = 32767;    
         }
         else {
             totalEval = 0;
@@ -226,6 +218,7 @@ int16_t alphaBeta(Board board, int16_t alpha, int16_t beta, int remDepth) {
     for (int i=0; i<currLegalMoves.size(); i++) {
         board.makeMove(currLegalMoves[i]);
         int16_t score = -alphaBeta(board, -beta, -alpha, remDepth-1);
+        //cout << currLegalMoves[i] << " " << score << " " << remDepth << "\n";
         //cout << score << " " << remDepth << " " << alpha << " " << beta << "\n";
         if (score >= beta) {
             return beta;
@@ -251,6 +244,8 @@ Move alphaBetaSearchRoot(Board board, int16_t alpha, int16_t beta, int remDepth)
         }*/
         board.makeMove(currLegalMoves[i]);
         int16_t score = -alphaBeta(board, -beta, -alpha, remDepth-1);
+        cout << currLegalMoves[i] << " " << score << " " << remDepth << "\n";
+        cout << quiesce(board, alpha, beta) << "\n";
         //cout << score << " " << remDepth << "\n";
         //cout << currLegalMoves[i] << " " << score << "\n";
         if (score >= beta) {
@@ -298,8 +293,8 @@ int main() {
         }
     
         board.makeMove(inputMove);
-        Move engineResponse = rootNegaMax(board, depth);
-        //Move engineResponse = alphaBetaSearchRoot(board, -32767, 32767, depth);
+        //Move engineResponse = rootNegaMax(board, depth);
+        Move engineResponse = alphaBetaSearchRoot(board, -32767, 32767, depth);
         cout << "quiesce eval is " << quiesce(board, -32767, 32767) << "\n";
         cout << "normal eval is " << eval(board) << "\n";
         //cout << alphaBeta(board, -32767, 32767, depth) << "\n";
