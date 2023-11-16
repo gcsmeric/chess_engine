@@ -139,18 +139,14 @@ int eg_king_table[64] = {
     -53, -34, -21, -11, -28, -14, -24, -43
 };
 
-int* mg_pesto_table[6] =
+int* pestoTables[12] =
 {
     mg_pawn_table,
     mg_knight_table,
     mg_bishop_table,
     mg_rook_table,
     mg_queen_table,
-    mg_king_table
-};
-
-int* eg_pesto_table[6] =
-{
+    mg_king_table,
     eg_pawn_table,
     eg_knight_table,
     eg_bishop_table,
@@ -196,56 +192,52 @@ int16_t eval(const Board& board) {
     int16_t matEval = 0;
     Color sideToMove = board.sideToMove();
     int pieceIndex = 0;
+    int whiteMat = 0;
+    int blackMat = 0;
     for (const PieceType p : {PieceType::PAWN, PieceType::BISHOP, PieceType::KNIGHT, PieceType::ROOK, PieceType::QUEEN}) {
-        matEval += coefficients[pieceIndex]*(builtin::popcount(board.pieces(p, Color::WHITE))-builtin::popcount(board.pieces(p, Color::BLACK)));
+        whiteMat += coefficients[pieceIndex]*builtin::popcount(board.pieces(p, Color::WHITE));
+        blackMat += coefficients[pieceIndex]*builtin::popcount(board.pieces(p, Color::BLACK));
         pieceIndex += 1;
     }
-    /*Movelist currLegalMoves = Movelist();
-    movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
-    Move randomMove = currLegalMoves[0];
-    board.makeNullMove();
-    Movelist currOpponentLegalMoves = Movelist();
-    movegen::legalmoves<MoveGenType::ALL>(currOpponentLegalMoves, board);
-    board.unmakeNullMove();
-    int16_t mobilityEval = currLegalMoves.size()-currOpponentLegalMoves.size();*/
-    //int16_t currentTurnBonus = 15;
+    matEval = whiteMat - blackMat;
+
+    int pestoTablesBaseIndex = 0;
+    if (whiteMat + blackMat <= 30) {
+        pestoTablesBaseIndex = 6;
+    }
+    int pieceSquareTableEval = 0;
+    int piecePestoTableIndex = 1;
+    for (const PieceType p : {PieceType::BISHOP, PieceType::KNIGHT, PieceType::ROOK, PieceType::QUEEN}) {
+        Bitboard whiteBB = board.pieces(p, Color::WHITE);
+        Bitboard blackBB = board.pieces(p, Color::BLACK);
+        utils::printBitboard(whiteBB);
+        utils::printBitboard(blackBB);
+        int whiteBBcount = builtin::popcount(whiteBB);
+        int blackBBcount = builtin::popcount(blackBB);
+        if (whiteBBcount > 0) {
+            pieceSquareTableEval += pestoTables[pestoTablesBaseIndex+piecePestoTableIndex][builtin::lsb(whiteBB)];
+            if (whiteBBcount == 2) {
+                pieceSquareTableEval += pestoTables[pestoTablesBaseIndex+piecePestoTableIndex][builtin::msb(whiteBB)];
+            }
+        }
+        if (blackBBcount > 0) {
+            pieceSquareTableEval -= pestoTables[pestoTablesBaseIndex+piecePestoTableIndex][builtin::lsb(whiteBB)/*APPLYINDEXTRANSFORMORGETOPPOSITETABLE*/];
+            if (blackBBcount == 2) {
+                pieceSquareTableEval -= pestoTables[pestoTablesBaseIndex+piecePestoTableIndex][builtin::msb(whiteBB)];
+            }
+        }
+        piecePestoTableIndex += 1;
+    }
+    //add pawn handling
+
     if (sideToMove == Color::BLACK) {
         matEval *= -1;
+        pieceSquareTableEval *= -1;
     }
-    int16_t totalEval = matEval;
-    /*//handle checkmate and stalemate positions
-    if (currLegalMoves.size() == 0) {
-        if (board.isAttacked(board.kingSq(sideToMove), sideToMove)) {
-            totalEval = -32767;    
-        }
-        else {
-            totalEval = 0;
-        }
-    }
-    else if (currOpponentLegalMoves.size() == 0) {
-        Color oppositeColor;
-        if (sideToMove == Color::WHITE) {
-            oppositeColor == Color::BLACK;
-        }
-        else {
-            oppositeColor == Color::WHITE;
-        }
-        if (board.isAttacked(board.kingSq(oppositeColor), oppositeColor)) {
-            totalEval = 32767;    
-        }
-        else {
-            totalEval = 0;
-        }
-    } */
+    
+    int16_t totalEval = matEval+pieceSquareTableEval;
 
     return totalEval;
-    //IMPLEMENT NAIVE https://www.chessprogramming.org/Evaluation#Where_to_Start
-    //MATERIAL EVAL (FIGURE OUT HOW TO ITERATE OVER PIECE AND COLOR ENUMS 
-    //AND ADD THOSE VALS TO MATEVAL)
-    //THEN ADD TO EVAL A FACTOR BASED ON MOBILITY AS IN LINK MATERIAL EXAMPLE ABOVE
-    //(NUMBER OF LEGAL MOVES), THEN ALSO A FACTOR FOR WHO'S TURN IT IS AND FINALLY
-    //SOME TABLES OF PIECE VALUES FOR EACH SQUARE https://www.chessprogramming.org/Piece-Square_Tables
-    //https://www.chessprogramming.org/PeSTO%27s_Evaluation_Function
 }
 
 int16_t negaMax(Board board, int depth) {
@@ -418,6 +410,7 @@ int main() {
         //cout << alphaBeta(board, -32767, 32767, depth) << "\n";
         board.makeMove(engineResponse);
         cout << engineResponse << "\n";
+        //cout << board.pieces(PieceType::BISHOP, Color::BLACK);
         //cout << "quiesce eval is " << quiesce(board, -32767, 32767) << "\n";
         //cout << "normal eval is " << eval(board) << "\n";
     }
