@@ -183,6 +183,16 @@ bool verifyInputMove(string str) {
     return false;
 }
 
+//Given a board square and color, returns the corresponding pesto piece-square table index
+int sqToPestoTableIndex(Square sq, Color color) {
+    if (color == Color::WHITE) {
+        return static_cast<int>(utils::squareFile(sq)) + 8*(7-static_cast<int>(utils::squareRank(sq)));
+    }
+    else {
+        return static_cast<int>(utils::squareFile(sq)) + 8*static_cast<int>(utils::squareRank(sq));
+    } 
+}
+
 int coefficients[5] = {100,300,300,500,900};
 int16_t eval(const Board& board) {
     //returns eval in centipawns of position (W.R.T. player who's turn it is)
@@ -194,41 +204,36 @@ int16_t eval(const Board& board) {
     int pieceIndex = 0;
     int whiteMat = 0;
     int blackMat = 0;
-    for (const PieceType p : {PieceType::PAWN, PieceType::BISHOP, PieceType::KNIGHT, PieceType::ROOK, PieceType::QUEEN}) {
+    for (const PieceType p : {PieceType::PAWN, PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN}) {
         whiteMat += coefficients[pieceIndex]*builtin::popcount(board.pieces(p, Color::WHITE));
         blackMat += coefficients[pieceIndex]*builtin::popcount(board.pieces(p, Color::BLACK));
         pieceIndex += 1;
     }
     matEval = whiteMat - blackMat;
+    
 
+    //determine whether to use middlegame or endgame piece-square tables
     int pestoTablesBaseIndex = 0;
     if (whiteMat + blackMat <= 30) {
         pestoTablesBaseIndex = 6;
     }
     int pieceSquareTableEval = 0;
     int piecePestoTableIndex = 1;
-    for (const PieceType p : {PieceType::BISHOP, PieceType::KNIGHT, PieceType::ROOK, PieceType::QUEEN}) {
+
+    //iterate through all pieces on the board and their positions and adjust evaluation according to pesto piece-square tables
+    for (const PieceType p : {PieceType::PAWN, PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN, PieceType::KING}) {
         Bitboard whiteBB = board.pieces(p, Color::WHITE);
         Bitboard blackBB = board.pieces(p, Color::BLACK);
-        utils::printBitboard(whiteBB);
-        utils::printBitboard(blackBB);
-        int whiteBBcount = builtin::popcount(whiteBB);
-        int blackBBcount = builtin::popcount(blackBB);
-        if (whiteBBcount > 0) {
-            pieceSquareTableEval += pestoTables[pestoTablesBaseIndex+piecePestoTableIndex][builtin::lsb(whiteBB)];
-            if (whiteBBcount == 2) {
-                pieceSquareTableEval += pestoTables[pestoTablesBaseIndex+piecePestoTableIndex][builtin::msb(whiteBB)];
-            }
+        while (whiteBB) {
+            Square sq = builtin::poplsb(whiteBB);
+            pieceSquareTableEval += pestoTables[pestoTablesBaseIndex+piecePestoTableIndex][sqToPestoTableIndex(sq, Color::WHITE)];
         }
-        if (blackBBcount > 0) {
-            pieceSquareTableEval -= pestoTables[pestoTablesBaseIndex+piecePestoTableIndex][builtin::lsb(whiteBB)/*APPLYINDEXTRANSFORMORGETOPPOSITETABLE*/];
-            if (blackBBcount == 2) {
-                pieceSquareTableEval -= pestoTables[pestoTablesBaseIndex+piecePestoTableIndex][builtin::msb(whiteBB)];
-            }
+        while (blackBB) {
+            Square sq = builtin::poplsb(blackBB);
+            pieceSquareTableEval -= pestoTables[pestoTablesBaseIndex+piecePestoTableIndex][sqToPestoTableIndex(sq, Color::BLACK)];
         }
         piecePestoTableIndex += 1;
     }
-    //add pawn handling
 
     if (sideToMove == Color::BLACK) {
         matEval *= -1;
@@ -240,6 +245,7 @@ int16_t eval(const Board& board) {
     return totalEval;
 }
 
+//naive negaMax implementation of minimax search
 int16_t negaMax(Board board, int depth) {
     if (depth == 0) {
         return eval(board);
@@ -263,9 +269,9 @@ int16_t negaMax(Board board, int depth) {
         }
     }
     return max;
-    //then implement alpha beta pruning https://www.chessprogramming.org/Alpha-Beta
 }
 
+//root call for naive negaMax implementation of minimax search
 Move rootNegaMax(Board board, int depth) {
     assert(depth>0);
     int16_t max = -32767; 
@@ -282,9 +288,11 @@ Move rootNegaMax(Board board, int depth) {
         board.unmakeMove(move);
     }
     return bestMove;
-    //then implement alpha beta pruning https://www.chessprogramming.org/Alpha-Beta
 }
 
+//quiescence eval function, a modified version of the basic eval function adjusted to operate with alpha-beta pruning
+//and to fully investigate all capture sequences from the current position to ensure that depth-related limitations 
+//don't lead to erroneous evaluation values
 int16_t quiesce(Board board, int16_t alpha, int16_t beta) {
     int16_t stand_pat = eval(board);
     if (stand_pat >= beta) {
@@ -313,9 +321,10 @@ int16_t quiesce(Board board, int16_t alpha, int16_t beta) {
     return alpha;
 }
 
+//negaMax minimax search with alpha-beta pruning optimization
 int16_t alphaBeta(Board board, int16_t alpha, int16_t beta, int remDepth) {
+
     if (remDepth == 0) {
-        //cout << quiesce(board, alpha, beta) << "\n"; 
         return quiesce(board, alpha, beta);
     }
     Movelist currLegalMoves = Movelist();
@@ -323,13 +332,10 @@ int16_t alphaBeta(Board board, int16_t alpha, int16_t beta, int remDepth) {
     for (const auto &move : currLegalMoves) {
         board.makeMove(move);
         int16_t score = -alphaBeta(board, -beta, -alpha, remDepth-1);
-        //cout << move << " " << score << " " << remDepth << "\n";
-        //cout << score << " " << remDepth << " " << alpha << " " << beta << "\n";
         if (score >= beta) {
             return beta;
         }
         if (score > alpha) {
-            //cout << score << " " << remDepth << "\n";
             alpha = score;
         }
         board.unmakeMove(move);
@@ -344,6 +350,7 @@ int16_t alphaBeta(Board board, int16_t alpha, int16_t beta, int remDepth) {
     return alpha;
 }
 
+//root call for negaMax minimax search with alpha-beta pruning optimization
 Move alphaBetaSearchRoot(Board board, int16_t alpha, int16_t beta, int remDepth) {
     assert(remDepth > 0);
     Move bestMove;
@@ -353,12 +360,7 @@ Move alphaBetaSearchRoot(Board board, int16_t alpha, int16_t beta, int remDepth)
     for (const auto &move : currLegalMoves) {
         board.makeMove(move);
         int16_t score = -alphaBeta(board, -beta, -alpha, remDepth-1);
-        //cout << move << " " << score << " " << remDepth << "\n";
-        //cout << quiesce(board, alpha, beta) << "\n";
-        //cout << score << " " << remDepth << "\n";
-        //cout << move << " " << score << "\n";
         if (score >= beta) {
-            //cout << "remdepth " << remDepth << "\n";
             return beta;
         }
         if (score > alpha) {
@@ -367,7 +369,6 @@ Move alphaBetaSearchRoot(Board board, int16_t alpha, int16_t beta, int remDepth)
         if (score > currMaxScore) {
             currMaxScore = score;
             bestMove = move;
-            //cout << "updated best legal move " << move << "\n";
         }
         board.unmakeMove(move);
     }
@@ -379,7 +380,7 @@ int main() {
     Board board;
     Move inputMove;
     string inputMoveStr;
-    int depth = 6;
+    int depth = 4;
     while (true){
         while (true) {
             cout << " Input your move: " << endl;
@@ -405,14 +406,8 @@ int main() {
         board.makeMove(inputMove);
         //Move engineResponse = rootNegaMax(board, depth);
         Move engineResponse = alphaBetaSearchRoot(board, -32767, 32767, depth);
-        cout << "quiesce eval is " << quiesce(board, -32767, 32767) << "\n";
-        cout << "normal eval is " << eval(board) << "\n";
-        //cout << alphaBeta(board, -32767, 32767, depth) << "\n";
         board.makeMove(engineResponse);
         cout << engineResponse << "\n";
-        //cout << board.pieces(PieceType::BISHOP, Color::BLACK);
-        //cout << "quiesce eval is " << quiesce(board, -32767, 32767) << "\n";
-        //cout << "normal eval is " << eval(board) << "\n";
     }
     
     return 0;
