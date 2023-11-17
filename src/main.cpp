@@ -155,6 +155,8 @@ int* pestoTables[12] =
     eg_king_table
 };
 
+int coefficients[5] = {100,300,300,500,900};
+
 bool verifyInputMove(string str) {
     // Check if the string has either 4 or 5 characters
     if (str.size() != 4 && str.size() != 5) {
@@ -193,7 +195,18 @@ int sqToPestoTableIndex(Square sq, Color color) {
     } 
 }
 
-int coefficients[5] = {100,300,300,500,900};
+//check if game is in the endgame stage based on amount of material left (so that depth can be increased thanks to lower branching factor)
+bool isEndgame(Board board) {
+    int mat = 0;
+    int pieceIndex = 0;
+    for (const PieceType p : {PieceType::PAWN, PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN}) {
+        mat += coefficients[pieceIndex]*builtin::popcount(board.pieces(p, Color::WHITE));
+        mat += coefficients[pieceIndex]*builtin::popcount(board.pieces(p, Color::BLACK));
+        pieceIndex += 1;
+    }
+    return (mat <= 30);
+}
+
 int16_t eval(const Board& board) {
     //returns eval in centipawns of position (W.R.T. player who's turn it is)
     //i.e. eval of 100 when it's black's turn means black has an advantage worth roughly a pawn
@@ -256,16 +269,19 @@ int16_t negaMax(Board board, int depth) {
     for (const auto &move : currLegalMoves) {
         board.makeMove(move);
         int16_t score = -negaMax(board, depth-1);
+        board.unmakeMove(move);
         if (score > max) {
             max = score;
         }
-        board.unmakeMove(move);
     }
     //in case of mate, check if stalemate
     if (currLegalMoves.size() == 0) {
         Color sideToMove = board.sideToMove();
         if (board.isAttacked(board.kingSq(sideToMove), sideToMove)) {
-            max = 0;
+            return -32767;
+        }
+        else {
+            return 0;
         }
     }
     return max;
@@ -281,11 +297,11 @@ Move rootNegaMax(Board board, int depth) {
     for (const auto &move : currLegalMoves) {
         board.makeMove(move);
         int16_t score = -negaMax(board, depth-1);
+        board.unmakeMove(move);
         if (score > max) {
             max = score;
             bestMove = move;
         }
-        board.unmakeMove(move);
     }
     return bestMove;
 }
@@ -293,7 +309,7 @@ Move rootNegaMax(Board board, int depth) {
 //quiescence eval function, a modified version of the basic eval function adjusted to operate with alpha-beta pruning
 //and to fully investigate all capture sequences from the current position to ensure that depth-related limitations 
 //don't lead to erroneous evaluation values
-int16_t quiesce(Board board, int16_t alpha, int16_t beta) {
+int16_t quiesce(Board& board, int16_t alpha, int16_t beta) {
     int16_t stand_pat = eval(board);
     if (stand_pat >= beta) {
         return beta;
@@ -322,7 +338,7 @@ int16_t quiesce(Board board, int16_t alpha, int16_t beta) {
 }
 
 //negaMax minimax search with alpha-beta pruning optimization
-int16_t alphaBeta(Board board, int16_t alpha, int16_t beta, int remDepth) {
+int16_t alphaBeta(Board& board, int16_t alpha, int16_t beta, int remDepth) {
 
     if (remDepth == 0) {
         return quiesce(board, alpha, beta);
@@ -332,18 +348,21 @@ int16_t alphaBeta(Board board, int16_t alpha, int16_t beta, int remDepth) {
     for (const auto &move : currLegalMoves) {
         board.makeMove(move);
         int16_t score = -alphaBeta(board, -beta, -alpha, remDepth-1);
+        board.unmakeMove(move);
         if (score >= beta) {
             return beta;
         }
         if (score > alpha) {
             alpha = score;
         }
-        board.unmakeMove(move);
     }
     //in case of mate, check for stalemate 
     if (currLegalMoves.size() == 0) {
         Color sideToMove = board.sideToMove();
         if (board.isAttacked(board.kingSq(sideToMove), sideToMove)) {
+            return -32767;
+        }
+        else {
             return 0;
         }
     }
@@ -351,18 +370,21 @@ int16_t alphaBeta(Board board, int16_t alpha, int16_t beta, int remDepth) {
 }
 
 //root call for negaMax minimax search with alpha-beta pruning optimization
-Move alphaBetaSearchRoot(Board board, int16_t alpha, int16_t beta, int remDepth) {
+Move alphaBetaSearchRoot(Board& board, int16_t alpha, int16_t beta, int remDepth) {
     assert(remDepth > 0);
-    Move bestMove;
+    Move bestMove = Move::NULL_MOVE;
     Movelist currLegalMoves = Movelist();
     int16_t currMaxScore = -32767;
     movegen::legalmoves<MoveGenType::ALL>(currLegalMoves, board);
     for (const auto &move : currLegalMoves) {
         board.makeMove(move);
-        int16_t score = -alphaBeta(board, -beta, -alpha, remDepth-1);
-        if (score >= beta) {
-            return beta;
+        //account for triple repetition - avoid it in winning positions
+        if (board.isRepetition() && (bestMove != Move::NULL_MOVE) && (quiesce(board, alpha, beta) > 500)) {
+            board.unmakeMove(move);
+            continue;
         }
+        int16_t score = -alphaBeta(board, -beta, -alpha, remDepth-1);
+        board.unmakeMove(move);
         if (score > alpha) {
             alpha = score;
         }
@@ -370,7 +392,6 @@ Move alphaBetaSearchRoot(Board board, int16_t alpha, int16_t beta, int remDepth)
             currMaxScore = score;
             bestMove = move;
         }
-        board.unmakeMove(move);
     }
     return bestMove;
 }
@@ -383,7 +404,7 @@ int main() {
     int depth = 4;
     while (true){
         while (true) {
-            cout << " Input your move: " << endl;
+            cout << " Input your move in UCI format: " << endl;
             cin >> inputMoveStr;
             inputMove = uci::uciToMove(board, inputMoveStr);
             Movelist currLegalMoves;
@@ -404,11 +425,17 @@ int main() {
         }
     
         board.makeMove(inputMove);
+        
         //Move engineResponse = rootNegaMax(board, depth);
+        if (isEndgame(board)) {
+            cout << "we're in the endgame now";
+            depth = 6;
+        }
         Move engineResponse = alphaBetaSearchRoot(board, -32767, 32767, depth);
-        board.makeMove(engineResponse);
         cout << engineResponse << "\n";
+        board.makeMove(engineResponse);
+        cout << board << "\n";
     }
-    
+    cout << "GAMEOVER";
     return 0;
 }
